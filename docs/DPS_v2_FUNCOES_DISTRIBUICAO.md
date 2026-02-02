@@ -4,12 +4,17 @@
 
 > Fonte: *DPS Functions Reference* (v2.6.0, atualizado em dezembro/2024). Gerado em 02/02/2026.
 
+> **NOTA:** Este documento foi atualizado para incluir todas as funções do plano de criação do novo sistema (Blueprint e Plano de Execução), com redistribuição otimizada seguindo os princípios de Clean Architecture.
 
 ---
 
 ## Índice de módulos
 
 - [Base Plugin (Core)](#base-plugin-core)
+  - [Domain Layer](#domain-layer)
+  - [Application Layer](#application-layer)
+  - [Infrastructure Layer](#infrastructure-layer)
+  - [UI Layer](#ui-layer)
 - [Client Portal Add-on](#client-portal-add-on)
 - [Communications Add-on](#communications-add-on)
 - [Finance Add-on](#finance-add-on)
@@ -31,13 +36,534 @@
 
 ## Base Plugin (Core)
 
+O Core segue a **Clean Architecture** com 4 camadas: Domain, Application, Infrastructure e UI.
+
 ### Funções globais
 
 - `dps_get_template()` — Localiza e carrega um template, permitindo override pelo tema.
 - `dps_get_template_path()` — Retorna o caminho do template que seria carregado, sem incluí-lo.
 - `dps_is_template_overridden()` — Verifica se um template está sendo sobrescrito pelo tema.
+- `dps_log()` — Função de logging global com níveis (debug, info, warning, error).
+- `dps_dispatch_event()` — Dispara um evento de domínio para listeners registrados.
+- `dps_container()` — Retorna instância do container de injeção de dependência.
 
-### APIs (classes e métodos públicos)
+---
+
+### Domain Layer
+
+> Entidades, Value Objects, Interfaces de Repository e Eventos de Domínio.
+
+#### Entidades (Entities)
+
+##### Client (Tutor)
+*Representa um cliente/tutor no sistema.*
+- `Client::getId()` — Retorna o identificador único do cliente.
+- `Client::getName()` — Retorna o nome do cliente.
+- `Client::getPhone()` — Retorna o telefone/WhatsApp do cliente.
+- `Client::getEmail()` — Retorna o email do cliente (opcional).
+- `Client::getAddress()` — Retorna o endereço completo do cliente.
+- `Client::getCpf()` — Retorna o CPF do cliente (opcional).
+- `Client::getCreatedAt()` — Retorna a data de cadastro.
+- `Client::changeName()` — Altera o nome do cliente com validação.
+- `Client::changePhone()` — Altera o telefone com validação.
+- `Client::changeEmail()` — Altera o email com validação.
+- `Client::changeAddress()` — Altera o endereço do cliente.
+
+##### Pet
+*Representa um pet vinculado a um cliente.*
+- `Pet::getId()` — Retorna o identificador único do pet.
+- `Pet::getClientId()` — Retorna o ID do tutor/cliente.
+- `Pet::getName()` — Retorna o nome do pet.
+- `Pet::getSpecies()` — Retorna a espécie (dog/cat).
+- `Pet::getBreed()` — Retorna a raça do pet.
+- `Pet::getSize()` — Retorna o porte (small/medium/large/giant).
+- `Pet::getCoatType()` — Retorna o tipo de pelagem.
+- `Pet::getSex()` — Retorna o sexo do pet.
+- `Pet::getWeight()` — Retorna o peso em kg.
+- `Pet::getBirthDate()` — Retorna a data de nascimento.
+- `Pet::getAggressiveness()` — Retorna o nível de agressividade (docile/moderate/aggressive).
+- `Pet::getRestrictions()` — Retorna restrições de saúde ou manejo.
+- `Pet::getGroomingNotes()` — Retorna notas específicas para tosa.
+
+##### Appointment (Atendimento/Agendamento)
+*Representa um agendamento ou atendimento de Banho e Tosa.*
+- `Appointment::getId()` — Retorna o identificador único do agendamento.
+- `Appointment::getClientId()` — Retorna o ID do cliente.
+- `Appointment::getPetId()` — Retorna o ID do pet.
+- `Appointment::getScheduledAt()` — Retorna a data/hora agendada.
+- `Appointment::getStatus()` — Retorna o status (scheduled/in_progress/completed/cancelled/no_show).
+- `Appointment::getServices()` — Retorna lista de serviços solicitados.
+- `Appointment::getNotes()` — Retorna notas do atendimento.
+- `Appointment::getTotalAmount()` — Retorna o valor total do atendimento.
+- `Appointment::getGroomerId()` — Retorna o ID do tosador responsável (opcional).
+- `Appointment::schedule()` — Agenda o atendimento com validação de data/horário.
+- `Appointment::start()` — Inicia o atendimento (muda status para in_progress).
+- `Appointment::complete()` — Finaliza o atendimento com sucesso.
+- `Appointment::cancel()` — Cancela o agendamento.
+- `Appointment::markAsNoShow()` — Marca como não comparecimento.
+
+#### Value Objects
+
+##### ClientId
+*Identificador único imutável de cliente.*
+- `ClientId::__construct()` — Cria instância com validação.
+- `ClientId::getValue()` — Retorna o valor do ID.
+- `ClientId::equals()` — Compara com outro ClientId.
+- `ClientId::generate()` — Gera novo ID único (factory method).
+
+##### PetId
+*Identificador único imutável de pet.*
+- `PetId::__construct()` — Cria instância com validação.
+- `PetId::getValue()` — Retorna o valor do ID.
+- `PetId::equals()` — Compara com outro PetId.
+
+##### AppointmentId
+*Identificador único imutável de agendamento.*
+- `AppointmentId::__construct()` — Cria instância com validação.
+- `AppointmentId::getValue()` — Retorna o valor do ID.
+- `AppointmentId::equals()` — Compara com outro AppointmentId.
+
+##### PhoneNumber
+*Número de telefone brasileiro normalizado e validado.*
+- `PhoneNumber::__construct()` — Cria instância com validação de formato brasileiro.
+- `PhoneNumber::getValue()` — Retorna o número normalizado (apenas dígitos).
+- `PhoneNumber::getFormatted()` — Retorna formatado para exibição (xx) xxxxx-xxxx.
+- `PhoneNumber::getWhatsAppLink()` — Retorna link wa.me completo.
+- `PhoneNumber::equals()` — Compara com outro PhoneNumber.
+- `PhoneNumber::isValid()` — Valida se string representa telefone brasileiro válido (static).
+
+##### Email
+*Endereço de email validado.*
+- `Email::__construct()` — Cria instância com validação de formato.
+- `Email::getValue()` — Retorna o endereço de email.
+- `Email::equals()` — Compara com outro Email.
+- `Email::isValid()` — Valida formato de email (static).
+
+##### Money
+*Valor monetário em centavos (evita problemas de ponto flutuante).*
+- `Money::__construct()` — Cria instância a partir de centavos.
+- `Money::fromDecimal()` — Cria instância a partir de valor decimal (factory method).
+- `Money::fromBrazilianFormat()` — Cria a partir de string no formato brasileiro (factory method).
+- `Money::getCents()` — Retorna valor em centavos.
+- `Money::getDecimal()` — Retorna valor decimal.
+- `Money::format()` — Formata para exibição com símbolo de moeda.
+- `Money::formatBrazilian()` — Formata no padrão brasileiro (R$ 1.234,56).
+- `Money::add()` — Soma dois valores Money.
+- `Money::subtract()` — Subtrai dois valores Money.
+- `Money::multiply()` — Multiplica por um fator.
+- `Money::equals()` — Compara com outro Money.
+- `Money::isZero()` — Verifica se é zero.
+- `Money::isPositive()` — Verifica se é positivo.
+- `Money::isNegative()` — Verifica se é negativo.
+
+##### DateRange
+*Intervalo de datas imutável.*
+- `DateRange::__construct()` — Cria instância com data início e fim.
+- `DateRange::getStart()` — Retorna data de início.
+- `DateRange::getEnd()` — Retorna data de fim.
+- `DateRange::contains()` — Verifica se uma data está dentro do intervalo.
+- `DateRange::overlaps()` — Verifica se há sobreposição com outro intervalo.
+- `DateRange::getDays()` — Retorna número de dias no intervalo.
+
+##### Address
+*Endereço completo validado.*
+- `Address::__construct()` — Cria instância com campos de endereço.
+- `Address::getStreet()` — Retorna logradouro.
+- `Address::getNumber()` — Retorna número.
+- `Address::getComplement()` — Retorna complemento.
+- `Address::getNeighborhood()` — Retorna bairro.
+- `Address::getCity()` — Retorna cidade.
+- `Address::getState()` — Retorna estado (UF).
+- `Address::getZipCode()` — Retorna CEP.
+- `Address::getFormatted()` — Retorna endereço formatado em uma linha.
+- `Address::getGoogleMapsUrl()` — Retorna URL do Google Maps para o endereço.
+
+#### Enums
+
+##### Species
+*Espécie do pet.*
+- `Species::Dog` — Cachorro.
+- `Species::Cat` — Gato.
+- `Species::label()` — Retorna label traduzido.
+
+##### PetSize
+*Porte do pet.*
+- `PetSize::Small` — Pequeno (até 10kg).
+- `PetSize::Medium` — Médio (10-25kg).
+- `PetSize::Large` — Grande (25-45kg).
+- `PetSize::Giant` — Gigante (acima de 45kg).
+- `PetSize::label()` — Retorna label traduzido.
+
+##### CoatType
+*Tipo de pelagem.*
+- `CoatType::Short` — Curta.
+- `CoatType::Medium` — Média.
+- `CoatType::Long` — Longa.
+- `CoatType::Double` — Dupla.
+- `CoatType::Hairless` — Sem pelo.
+- `CoatType::label()` — Retorna label traduzido.
+
+##### Aggressiveness
+*Nível de agressividade.*
+- `Aggressiveness::Docile` — Dócil.
+- `Aggressiveness::Moderate` — Moderado.
+- `Aggressiveness::Aggressive` — Agressivo.
+- `Aggressiveness::label()` — Retorna label traduzido.
+
+##### AppointmentStatus
+*Status do agendamento.*
+- `AppointmentStatus::Scheduled` — Agendado.
+- `AppointmentStatus::InProgress` — Em Atendimento.
+- `AppointmentStatus::Completed` — Concluído.
+- `AppointmentStatus::Cancelled` — Cancelado.
+- `AppointmentStatus::NoShow` — Não Compareceu.
+- `AppointmentStatus::label()` — Retorna label traduzido.
+- `AppointmentStatus::color()` — Retorna cor para UI.
+
+##### ServiceType
+*Tipos de serviço de Banho e Tosa.*
+- `ServiceType::Bath` — Banho.
+- `ServiceType::HygienicGrooming` — Tosa Higiênica.
+- `ServiceType::FullGrooming` — Tosa Completa.
+- `ServiceType::Hydration` — Hidratação.
+- `ServiceType::Detangling` — Desembaraço.
+- `ServiceType::NailTrim` — Corte de Unha.
+- `ServiceType::EarCleaning` — Limpeza de Ouvido.
+- `ServiceType::label()` — Retorna label traduzido.
+
+#### Repository Interfaces
+
+> Interfaces definidas no Domain, implementadas no Infrastructure.
+
+##### ClientRepositoryInterface
+*Interface para persistência de clientes.*
+- `ClientRepositoryInterface::findById()` — Busca cliente por ID.
+- `ClientRepositoryInterface::findByPhone()` — Busca cliente por telefone.
+- `ClientRepositoryInterface::findByEmail()` — Busca cliente por email.
+- `ClientRepositoryInterface::save()` — Salva cliente (criar ou atualizar).
+- `ClientRepositoryInterface::delete()` — Remove cliente.
+- `ClientRepositoryInterface::search()` — Busca clientes com filtros e paginação.
+- `ClientRepositoryInterface::nextId()` — Gera próximo ID disponível.
+
+##### PetRepositoryInterface
+*Interface para persistência de pets.*
+- `PetRepositoryInterface::findById()` — Busca pet por ID.
+- `PetRepositoryInterface::findByClient()` — Lista pets de um cliente.
+- `PetRepositoryInterface::save()` — Salva pet (criar ou atualizar).
+- `PetRepositoryInterface::delete()` — Remove pet.
+- `PetRepositoryInterface::countByClient()` — Conta pets de um cliente.
+- `PetRepositoryInterface::nextId()` — Gera próximo ID disponível.
+
+##### AppointmentRepositoryInterface
+*Interface para persistência de agendamentos.*
+- `AppointmentRepositoryInterface::findById()` — Busca agendamento por ID.
+- `AppointmentRepositoryInterface::findByClient()` — Lista agendamentos de um cliente.
+- `AppointmentRepositoryInterface::findByPet()` — Lista agendamentos de um pet.
+- `AppointmentRepositoryInterface::findByDateRange()` — Lista agendamentos em um período.
+- `AppointmentRepositoryInterface::findByStatus()` — Lista agendamentos por status.
+- `AppointmentRepositoryInterface::save()` — Salva agendamento (criar ou atualizar).
+- `AppointmentRepositoryInterface::delete()` — Remove agendamento.
+- `AppointmentRepositoryInterface::nextId()` — Gera próximo ID disponível.
+
+#### Domain Events
+
+##### ClientCreated
+*Disparado quando um novo cliente é cadastrado.*
+- `ClientCreated::getClientId()` — Retorna ID do cliente criado.
+- `ClientCreated::getOccurredAt()` — Retorna timestamp do evento.
+
+##### ClientUpdated
+*Disparado quando dados de um cliente são atualizados.*
+- `ClientUpdated::getClientId()` — Retorna ID do cliente.
+- `ClientUpdated::getChangedFields()` — Retorna campos alterados.
+
+##### PetAddedToClient
+*Disparado quando um pet é vinculado a um cliente.*
+- `PetAddedToClient::getPetId()` — Retorna ID do pet.
+- `PetAddedToClient::getClientId()` — Retorna ID do cliente.
+
+##### AppointmentScheduled
+*Disparado quando um agendamento é criado.*
+- `AppointmentScheduled::getAppointmentId()` — Retorna ID do agendamento.
+- `AppointmentScheduled::getClientId()` — Retorna ID do cliente.
+- `AppointmentScheduled::getPetId()` — Retorna ID do pet.
+- `AppointmentScheduled::getScheduledAt()` — Retorna data/hora agendada.
+
+##### AppointmentCompleted
+*Disparado quando um atendimento é finalizado.*
+- `AppointmentCompleted::getAppointmentId()` — Retorna ID do agendamento.
+- `AppointmentCompleted::getCompletedAt()` — Retorna timestamp de conclusão.
+- `AppointmentCompleted::getTotalAmount()` — Retorna valor total.
+
+##### AppointmentCancelled
+*Disparado quando um agendamento é cancelado.*
+- `AppointmentCancelled::getAppointmentId()` — Retorna ID do agendamento.
+- `AppointmentCancelled::getReason()` — Retorna motivo do cancelamento.
+
+---
+
+### Application Layer
+
+> Casos de uso (Use Cases), Commands, Queries, DTOs e Handlers.
+
+#### Commands e Handlers — Clientes
+
+##### CreateClientCommand / CreateClientHandler
+*Criar novo cliente.*
+- `CreateClientCommand::__construct()` — Recebe name, phone, email (opcional), address (opcional).
+- `CreateClientHandler::handle()` — Valida, cria entidade, persiste e dispara ClientCreated.
+
+##### UpdateClientCommand / UpdateClientHandler
+*Atualizar dados de cliente existente.*
+- `UpdateClientCommand::__construct()` — Recebe clientId e campos a atualizar.
+- `UpdateClientHandler::handle()` — Valida, atualiza entidade, persiste e dispara ClientUpdated.
+
+##### DeleteClientCommand / DeleteClientHandler
+*Remover cliente (soft delete recomendado).*
+- `DeleteClientCommand::__construct()` — Recebe clientId.
+- `DeleteClientHandler::handle()` — Valida dependências, remove e dispara ClientDeleted.
+
+#### Queries e Handlers — Clientes
+
+##### GetClientByIdQuery / GetClientByIdHandler
+*Buscar cliente por ID.*
+- `GetClientByIdQuery::__construct()` — Recebe clientId.
+- `GetClientByIdHandler::handle()` — Retorna ClientDTO ou null.
+
+##### SearchClientsQuery / SearchClientsHandler
+*Buscar clientes com filtros e paginação.*
+- `SearchClientsQuery::__construct()` — Recebe search, page, perPage, filters.
+- `SearchClientsHandler::handle()` — Retorna PaginatedResult<ClientDTO>.
+
+#### Commands e Handlers — Pets
+
+##### AddPetToClientCommand / AddPetToClientHandler
+*Adicionar pet a um cliente.*
+- `AddPetToClientCommand::__construct()` — Recebe clientId e dados do pet.
+- `AddPetToClientHandler::handle()` — Cria pet, persiste e dispara PetAddedToClient.
+
+##### UpdatePetCommand / UpdatePetHandler
+*Atualizar dados de um pet.*
+- `UpdatePetCommand::__construct()` — Recebe petId e campos a atualizar.
+- `UpdatePetHandler::handle()` — Valida, atualiza e persiste.
+
+##### DeletePetCommand / DeletePetHandler
+*Remover pet.*
+- `DeletePetCommand::__construct()` — Recebe petId.
+- `DeletePetHandler::handle()` — Valida dependências e remove.
+
+#### Queries e Handlers — Pets
+
+##### GetPetByIdQuery / GetPetByIdHandler
+*Buscar pet por ID.*
+- `GetPetByIdQuery::__construct()` — Recebe petId.
+- `GetPetByIdHandler::handle()` — Retorna PetDTO ou null.
+
+##### ListPetsByClientQuery / ListPetsByClientHandler
+*Listar pets de um cliente.*
+- `ListPetsByClientQuery::__construct()` — Recebe clientId.
+- `ListPetsByClientHandler::handle()` — Retorna array de PetDTO.
+
+#### Commands e Handlers — Agendamentos
+
+##### ScheduleAppointmentCommand / ScheduleAppointmentHandler
+*Agendar novo atendimento.*
+- `ScheduleAppointmentCommand::__construct()` — Recebe clientId, petId, scheduledAt, services.
+- `ScheduleAppointmentHandler::handle()` — Valida disponibilidade, cria agendamento e dispara AppointmentScheduled.
+
+##### UpdateAppointmentCommand / UpdateAppointmentHandler
+*Atualizar agendamento.*
+- `UpdateAppointmentCommand::__construct()` — Recebe appointmentId e campos.
+- `UpdateAppointmentHandler::handle()` — Valida e atualiza.
+
+##### CancelAppointmentCommand / CancelAppointmentHandler
+*Cancelar agendamento.*
+- `CancelAppointmentCommand::__construct()` — Recebe appointmentId e reason (opcional).
+- `CancelAppointmentHandler::handle()` — Cancela e dispara AppointmentCancelled.
+
+##### CompleteAppointmentCommand / CompleteAppointmentHandler
+*Finalizar atendimento.*
+- `CompleteAppointmentCommand::__construct()` — Recebe appointmentId, notes (opcional), totalAmount.
+- `CompleteAppointmentHandler::handle()` — Finaliza e dispara AppointmentCompleted.
+
+#### Queries e Handlers — Agendamentos
+
+##### GetAppointmentByIdQuery / GetAppointmentByIdHandler
+*Buscar agendamento por ID.*
+- `GetAppointmentByIdQuery::__construct()` — Recebe appointmentId.
+- `GetAppointmentByIdHandler::handle()` — Retorna AppointmentDTO ou null.
+
+##### ListAppointmentsByClientQuery / ListAppointmentsByClientHandler
+*Listar agendamentos de um cliente.*
+- `ListAppointmentsByClientQuery::__construct()` — Recebe clientId, filters.
+- `ListAppointmentsByClientHandler::handle()` — Retorna array de AppointmentDTO.
+
+##### ListAppointmentsByDateRangeQuery / ListAppointmentsByDateRangeHandler
+*Listar agendamentos por período.*
+- `ListAppointmentsByDateRangeQuery::__construct()` — Recebe startDate, endDate, filters.
+- `ListAppointmentsByDateRangeHandler::handle()` — Retorna array de AppointmentDTO.
+
+#### DTOs (Data Transfer Objects)
+
+##### ClientDTO
+*Dados de cliente para transferência entre camadas.*
+- `ClientDTO::id` — ID do cliente.
+- `ClientDTO::name` — Nome do cliente.
+- `ClientDTO::phone` — Telefone.
+- `ClientDTO::phoneFormatted` — Telefone formatado.
+- `ClientDTO::email` — Email (nullable).
+- `ClientDTO::address` — Endereço (nullable).
+- `ClientDTO::petsCount` — Quantidade de pets.
+- `ClientDTO::createdAt` — Data de cadastro.
+
+##### PetDTO
+*Dados de pet para transferência.*
+- `PetDTO::id` — ID do pet.
+- `PetDTO::clientId` — ID do tutor.
+- `PetDTO::name` — Nome do pet.
+- `PetDTO::species` — Espécie.
+- `PetDTO::breed` — Raça.
+- `PetDTO::size` — Porte.
+- `PetDTO::coatType` — Tipo de pelagem.
+- `PetDTO::aggressiveness` — Nível de agressividade.
+
+##### AppointmentDTO
+*Dados de agendamento para transferência.*
+- `AppointmentDTO::id` — ID do agendamento.
+- `AppointmentDTO::clientId` — ID do cliente.
+- `AppointmentDTO::petId` — ID do pet.
+- `AppointmentDTO::clientName` — Nome do cliente (denormalizado).
+- `AppointmentDTO::petName` — Nome do pet (denormalizado).
+- `AppointmentDTO::scheduledAt` — Data/hora agendada.
+- `AppointmentDTO::status` — Status atual.
+- `AppointmentDTO::services` — Lista de serviços.
+- `AppointmentDTO::totalAmount` — Valor total.
+
+##### PaginatedResult
+*Resultado paginado genérico.*
+- `PaginatedResult::items` — Array de itens.
+- `PaginatedResult::total` — Total de registros.
+- `PaginatedResult::page` — Página atual.
+- `PaginatedResult::perPage` — Itens por página.
+- `PaginatedResult::totalPages` — Total de páginas.
+- `PaginatedResult::hasNext()` — Verifica se há próxima página.
+- `PaginatedResult::hasPrevious()` — Verifica se há página anterior.
+
+---
+
+### Infrastructure Layer
+
+> Implementações concretas, adapters WordPress, persistência e segurança.
+
+#### Container e Bootstrap
+
+##### DPS_Container
+*Container de injeção de dependência minimalista.*
+- `DPS_Container::get_instance()` — Retorna instância singleton do container.
+- `DPS_Container::bind()` — Registra binding de interface para implementação.
+- `DPS_Container::singleton()` — Registra binding singleton.
+- `DPS_Container::make()` — Resolve e retorna instância de uma classe/interface.
+- `DPS_Container::has()` — Verifica se um binding existe.
+
+##### DPS_Bootstrap
+*Bootstrap do plugin WordPress.*
+- `DPS_Bootstrap::init()` — Inicializa o plugin, registra hooks e carrega dependências.
+- `DPS_Bootstrap::register_services()` — Registra serviços no container.
+- `DPS_Bootstrap::register_routes()` — Registra rotas REST API.
+- `DPS_Bootstrap::register_hooks()` — Registra action e filter hooks.
+- `DPS_Bootstrap::activate()` — Executado na ativação do plugin.
+- `DPS_Bootstrap::deactivate()` — Executado na desativação do plugin.
+
+#### Event System
+
+##### DPS_Event_Dispatcher
+*Sistema de eventos de domínio.*
+- `DPS_Event_Dispatcher::get_instance()` — Retorna instância singleton.
+- `DPS_Event_Dispatcher::dispatch()` — Dispara um evento para todos os listeners.
+- `DPS_Event_Dispatcher::listen()` — Registra um listener para um tipo de evento.
+- `DPS_Event_Dispatcher::forget()` — Remove listeners de um evento.
+
+#### Repositories (Implementações)
+
+##### WpdbClientRepository
+*Implementação do ClientRepository usando $wpdb.*
+- `WpdbClientRepository::findById()` — Busca cliente por ID no banco.
+- `WpdbClientRepository::findByPhone()` — Busca cliente por telefone.
+- `WpdbClientRepository::findByEmail()` — Busca cliente por email.
+- `WpdbClientRepository::save()` — Persiste cliente (INSERT ou UPDATE).
+- `WpdbClientRepository::delete()` — Remove cliente do banco.
+- `WpdbClientRepository::search()` — Busca com filtros e paginação.
+- `WpdbClientRepository::nextId()` — Gera próximo ID (auto-increment ou UUID).
+
+##### WpdbPetRepository
+*Implementação do PetRepository usando $wpdb.*
+- `WpdbPetRepository::findById()` — Busca pet por ID.
+- `WpdbPetRepository::findByClient()` — Lista pets de um cliente.
+- `WpdbPetRepository::save()` — Persiste pet.
+- `WpdbPetRepository::delete()` — Remove pet.
+- `WpdbPetRepository::countByClient()` — Conta pets de um cliente.
+
+##### WpdbAppointmentRepository
+*Implementação do AppointmentRepository usando $wpdb.*
+- `WpdbAppointmentRepository::findById()` — Busca agendamento por ID.
+- `WpdbAppointmentRepository::findByClient()` — Lista por cliente.
+- `WpdbAppointmentRepository::findByPet()` — Lista por pet.
+- `WpdbAppointmentRepository::findByDateRange()` — Lista por período.
+- `WpdbAppointmentRepository::findByStatus()` — Lista por status.
+- `WpdbAppointmentRepository::save()` — Persiste agendamento.
+- `WpdbAppointmentRepository::delete()` — Remove agendamento.
+
+##### LegacySchemaMap
+*Mapeamento de nomes de tabelas/colunas do banco legado.*
+- `LegacySchemaMap::getTableName()` — Retorna nome da tabela com prefixo.
+- `LegacySchemaMap::getColumnName()` — Retorna nome real da coluna.
+- `LegacySchemaMap::getClientsTable()` — Retorna nome da tabela de clientes.
+- `LegacySchemaMap::getPetsTable()` — Retorna nome da tabela de pets.
+- `LegacySchemaMap::getAppointmentsTable()` — Retorna nome da tabela de agendamentos.
+
+#### REST API v2 Controllers
+
+##### DPS_REST_Clients_Controller
+*Controller REST para gestão de clientes.*
+- `DPS_REST_Clients_Controller::register_routes()` — Registra rotas /dps/v2/clients.
+- `DPS_REST_Clients_Controller::get_items()` — GET /clients — Lista clientes.
+- `DPS_REST_Clients_Controller::get_item()` — GET /clients/{id} — Detalhes do cliente.
+- `DPS_REST_Clients_Controller::create_item()` — POST /clients — Criar cliente.
+- `DPS_REST_Clients_Controller::update_item()` — PUT /clients/{id} — Atualizar cliente.
+- `DPS_REST_Clients_Controller::delete_item()` — DELETE /clients/{id} — Remover cliente.
+- `DPS_REST_Clients_Controller::get_item_permissions_check()` — Verifica permissões para operações.
+- `DPS_REST_Clients_Controller::get_item_schema()` — Retorna schema JSON do cliente.
+
+##### DPS_REST_Pets_Controller
+*Controller REST para gestão de pets.*
+- `DPS_REST_Pets_Controller::register_routes()` — Registra rotas /dps/v2/clients/{id}/pets e /dps/v2/pets.
+- `DPS_REST_Pets_Controller::get_items()` — GET /pets ou /clients/{id}/pets — Lista pets.
+- `DPS_REST_Pets_Controller::get_item()` — GET /pets/{id} — Detalhes do pet.
+- `DPS_REST_Pets_Controller::create_item()` — POST /clients/{id}/pets — Criar pet.
+- `DPS_REST_Pets_Controller::update_item()` — PUT /pets/{id} — Atualizar pet.
+- `DPS_REST_Pets_Controller::delete_item()` — DELETE /pets/{id} — Remover pet.
+
+##### DPS_REST_Appointments_Controller
+*Controller REST para gestão de agendamentos.*
+- `DPS_REST_Appointments_Controller::register_routes()` — Registra rotas /dps/v2/appointments.
+- `DPS_REST_Appointments_Controller::get_items()` — GET /appointments — Lista agendamentos.
+- `DPS_REST_Appointments_Controller::get_item()` — GET /appointments/{id} — Detalhes.
+- `DPS_REST_Appointments_Controller::create_item()` — POST /appointments — Criar agendamento.
+- `DPS_REST_Appointments_Controller::update_item()` — PUT /appointments/{id} — Atualizar.
+- `DPS_REST_Appointments_Controller::delete_item()` — DELETE /appointments/{id} — Cancelar/remover.
+- `DPS_REST_Appointments_Controller::complete_item()` — POST /appointments/{id}/complete — Finalizar.
+- `DPS_REST_Appointments_Controller::cancel_item()` — POST /appointments/{id}/cancel — Cancelar.
+
+#### Security (Rate Limiting e Validação)
+
+##### DPS_Rate_Limiter
+*Controle de rate limiting para proteção contra abuso.*
+- `DPS_Rate_Limiter::check()` — Verifica se requisição está dentro do limite.
+- `DPS_Rate_Limiter::hit()` — Registra uma requisição.
+- `DPS_Rate_Limiter::remaining()` — Retorna requisições restantes.
+- `DPS_Rate_Limiter::clear()` — Limpa contadores de um IP/usuário.
+
+### APIs existentes (classes e métodos públicos)
 
 #### DPS_Addon_Manager
 *Gerenciador central de add-ons. Fornece listagem, categorização e verificação de instalação.*
@@ -162,7 +688,97 @@
 
 #### DPS_Admin_Tabs_Helper
 *Helper para organização e renderização de abas/tabs no admin do DPS.*
-- *(Sem métodos públicos listados no documento de referência.)*
+- `DPS_Admin_Tabs_Helper::register_tab()` — Registra uma nova aba.
+- `DPS_Admin_Tabs_Helper::get_tabs()` — Retorna todas as abas registradas.
+- `DPS_Admin_Tabs_Helper::render_tabs()` — Renderiza navegação de abas.
+- `DPS_Admin_Tabs_Helper::get_current_tab()` — Retorna a aba ativa atual.
+
+---
+
+### UI Layer
+
+> Componentes de interface, Design System e recursos de UI.
+
+#### Design System
+
+##### Design Tokens
+*Valores padronizados de design para consistência visual.*
+- **Cores:** primary, secondary, success, warning, error, neutral
+- **Tipografia:** escala de tamanhos (xs, sm, base, lg, xl, 2xl, etc.)
+- **Espaçamento:** escala de 4px (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24)
+- **Raio de borda:** none, sm, md, lg, full
+- **Sombras:** sm, md, lg, xl
+- **Breakpoints:** sm (640px), md (768px), lg (1024px), xl (1280px)
+
+#### Componentes Base (React/TS)
+
+##### Button
+*Botão reutilizável com variantes e estados.*
+- Props: `variant`, `size`, `disabled`, `loading`, `onClick`, `children`
+- Variantes: primary, secondary, danger, ghost, link
+
+##### Input
+*Campo de entrada de texto.*
+- Props: `type`, `label`, `error`, `disabled`, `required`, `placeholder`
+- Suporte a máscara (telefone, CPF)
+
+##### Select
+*Dropdown de seleção.*
+- Props: `options`, `value`, `onChange`, `label`, `error`, `placeholder`
+
+##### DataTable
+*Tabela de dados com recursos avançados.*
+- Props: `data`, `columns`, `pagination`, `sortable`, `searchable`, `onRowClick`
+- Features: paginação, ordenação, filtro, seleção de linhas
+
+##### Modal / Dialog
+*Janela modal para confirmações e formulários.*
+- Props: `open`, `onClose`, `title`, `size`, `children`
+
+##### Toast / Notification
+*Notificações temporárias.*
+- Tipos: success, error, warning, info
+- Posições configuráveis
+
+##### Form Components
+*Componentes de formulário específicos.*
+- PhoneInput: Campo de telefone com máscara brasileira
+- MoneyInput: Campo de valor monetário
+- DatePicker: Seletor de data
+- SearchInput: Campo de busca com debounce
+
+#### Admin Pages (React/TS)
+
+##### ClientsPage
+*Página de listagem e gestão de clientes.*
+- Listagem com DataTable
+- Busca por nome/telefone
+- Ações: criar, editar, ver detalhes
+
+##### ClientFormPage
+*Formulário de criação/edição de cliente.*
+- Campos validados
+- Vinculação de pets
+- Histórico de atendimentos
+
+##### PetsPage
+*Página de listagem de pets.*
+- Filtros por porte, espécie
+- Visualização por cliente
+
+##### AppointmentsPage
+*Página de agendamentos.*
+- Visualização em calendário e lista
+- Filtros por status, data
+- Criação rápida
+
+##### DashboardPage
+*Dashboard principal do admin.*
+- Resumo do dia
+- Próximos atendimentos
+- Alertas e notificações
+
+---
 
 ## Client Portal Add-on
 
@@ -186,36 +802,46 @@
 - `DPS_Portal_Session_Manager::logout()` — Faz logout do cliente
 
 #### DPS_Portal_Token_Manager
-*Geração e validação de tokens de acesso único.*
-- `DPS_Portal_Token_Manager::get_instance()` — Gerenciador de tokens de acesso ao Portal do Cliente Esta classe gerencia a criação, validação, revogação e limpeza de tokens de autenticação para o Portal do Cliente.
-- `DPS_Portal_Token_Manager::maybe_create_table()` — Construtor privado para singleton
-- `DPS_Portal_Token_Manager::generate_token()` — Cria a tabela de tokens
-- `DPS_Portal_Token_Manager::validate_token()` — Valida um token e retorna os dados se válido Implementa rate limiting para prevenir brute force: - 5 tentativas por hora por IP - Cache negativo de tokens inválidos (5 min) - Logg…
-- `DPS_Portal_Token_Manager::mark_as_used()` — Incrementa o contador de rate limiting
-- `DPS_Portal_Token_Manager::revoke_tokens()` — Revoga todos os tokens ativos de um cliente
+*Geração e validação de tokens de acesso único (Magic Links).*
+- `DPS_Portal_Token_Manager::get_instance()` — Retorna instância singleton do gerenciador de tokens.
+- `DPS_Portal_Token_Manager::maybe_create_table()` — Cria a tabela de tokens (wp_petos_portal_tokens) se não existir.
+- `DPS_Portal_Token_Manager::generate_token()` — Gera novo token de acesso único com expiração configurável.
+- `DPS_Portal_Token_Manager::validate_token()` — Valida um token e retorna dados do cliente se válido. Implementa rate limiting para prevenir brute force (5 tentativas/hora por IP), cache negativo de tokens inválidos (5 min), e logging de tentativas para auditoria.
+- `DPS_Portal_Token_Manager::mark_as_used()` — Marca token como usado após autenticação bem-sucedida.
+- `DPS_Portal_Token_Manager::revoke_tokens()` — Revoga todos os tokens ativos de um cliente.
+- `DPS_Portal_Token_Manager::cleanup_expired()` — Remove tokens expirados do banco (executado via cron).
 
-#### DPS_Client_Repository
-*Repositório: consulta otimizada de dados de clientes.*
-- `DPS_Client_Repository::get_instance()` — Repositório para operações de dados relacionadas a clientes.
-- `DPS_Client_Repository::get_client_by_id()` — Construtor privado (singleton).
-- `DPS_Client_Repository::get_client_by_email()` — Busca um cliente por email.
-- `DPS_Client_Repository::get_client_by_phone()` — Busca um cliente por telefone.
-- `DPS_Client_Repository::get_clients()` — Busca todos os clientes com paginação.
+> **Nota sobre Repositories:** Os repositories do Portal (`DPS_Client_Repository`, `DPS_Pet_Repository`, `DPS_Appointment_Repository`, `DPS_Finance_Repository`) utilizam internamente as implementações do Core (`WpdbClientRepository`, `WpdbPetRepository`, `WpdbAppointmentRepository`). Eles são mantidos como facades para compatibilidade, delegando para o Core.
 
-#### DPS_Pet_Repository
-*Repositório: consulta de pets vinculados a clientes.*
-- `DPS_Pet_Repository::get_instance()` — Repositório para operações de dados relacionadas a pets.
-- `DPS_Pet_Repository::get_pet()` — Construtor privado (singleton).
-- `DPS_Pet_Repository::get_pets_by_client()` — Busca todos os pets de um cliente.
-- `DPS_Pet_Repository::pet_belongs_to_client()` — Verifica se um pet pertence a um cliente.
+#### DPS_Portal_Client_Facade
+*Facade para acesso a dados de clientes no contexto do Portal. Delega para WpdbClientRepository do Core.*
+- `DPS_Portal_Client_Facade::get_instance()` — Retorna instância singleton.
+- `DPS_Portal_Client_Facade::get_client_by_id()` — Busca cliente por ID.
+- `DPS_Portal_Client_Facade::get_client_by_email()` — Busca cliente por email.
+- `DPS_Portal_Client_Facade::get_client_by_phone()` — Busca cliente por telefone.
 
-#### DPS_Appointment_Repository
-*Repositório de agendamentos do Portal do Cliente.*
-- *(Sem métodos públicos listados no documento de referência.)*
+#### DPS_Portal_Pet_Facade
+*Facade para acesso a dados de pets no contexto do Portal. Delega para WpdbPetRepository do Core.*
+- `DPS_Portal_Pet_Facade::get_instance()` — Retorna instância singleton.
+- `DPS_Portal_Pet_Facade::get_pet()` — Busca pet por ID.
+- `DPS_Portal_Pet_Facade::get_pets_by_client()` — Busca todos os pets de um cliente.
+- `DPS_Portal_Pet_Facade::pet_belongs_to_client()` — Verifica se um pet pertence a um cliente.
 
-#### DPS_Finance_Repository
-*Repositório financeiro do Portal do Cliente (transações, pendências, etc.).*
-- *(Sem métodos públicos listados no documento de referência.)*
+#### DPS_Portal_Appointment_Facade
+*Facade para acesso a agendamentos no contexto do Portal.*
+- `DPS_Portal_Appointment_Facade::get_instance()` — Retorna instância singleton.
+- `DPS_Portal_Appointment_Facade::get_upcoming()` — Lista próximos agendamentos do cliente.
+- `DPS_Portal_Appointment_Facade::get_history()` — Lista histórico de agendamentos.
+- `DPS_Portal_Appointment_Facade::get_by_id()` — Busca agendamento específico com validação de propriedade.
+
+#### DPS_Portal_REST_Controller
+*Controller REST específico do Portal do Cliente.*
+- `DPS_Portal_REST_Controller::register_routes()` — Registra rotas /dps/v2/portal/*.
+- `DPS_Portal_REST_Controller::request_magic_link()` — POST /portal/request-link — Solicita magic link.
+- `DPS_Portal_REST_Controller::validate_token()` — POST /portal/validate — Valida token e inicia sessão.
+- `DPS_Portal_REST_Controller::get_session()` — GET /portal/session — Retorna dados da sessão atual.
+- `DPS_Portal_REST_Controller::get_summary()` — GET /portal/summary — Retorna resumo do cliente (pets, próximos atendimentos).
+- `DPS_Portal_REST_Controller::logout()` — POST /portal/logout — Encerra sessão.
 
 ## Communications Add-on
 
@@ -328,17 +954,31 @@
 
 #### DPS_Push_API
 *API de push notifications usando Web Push Protocol (VAPID).*
-- `DPS_Push_API::generate_vapid_keys()` — API de Push Notifications para o DPS. Implementa Web Push API usando biblioteca PHP nativa.
-- `DPS_Push_API::send_to_user()` — Envia notificação para um usuário específico.
+- `DPS_Push_API::get_instance()` — Retorna instância singleton da API de Push.
+- `DPS_Push_API::generate_vapid_keys()` — Gera par de chaves VAPID para Web Push.
+- `DPS_Push_API::get_vapid_public_key()` — Retorna a chave pública VAPID para uso no frontend.
+- `DPS_Push_API::send_to_user()` — Envia notificação push para um usuário específico.
 - `DPS_Push_API::send_to_all_admins()` — Envia notificação para todos os administradores.
-- `DPS_Push_API::dps_ai_log_debug()` — Logger condicional para o AI Add-on.
-- `DPS_Push_API::dps_ai_log_info()` — Registra uma mensagem informativa. Útil para eventos normais do sistema que valem documentação. Não é registrado em produção (a menos que debug_logging esteja habilitado).
-- `DPS_Push_API::dps_ai_log_warning()` — Registra uma mensagem de aviso. Indica situações anormais que não são necessariamente erros. Não é registrado em produção (a menos que debug_logging esteja habilitado).
-- `DPS_Push_API::dps_ai_log_error()` — Registra uma mensagem de erro. Indica falhas críticas que requerem atenção. Sempre é registrado, mesmo em produção.
+- `DPS_Push_API::send_to_subscribers()` — Envia notificação para lista de subscribers.
+- `DPS_Push_API::subscribe()` — Registra nova subscription de push.
+- `DPS_Push_API::unsubscribe()` — Remove subscription de push.
+
+#### DPS_Push_Subscription_Manager
+*Gerenciamento de subscriptions de push notifications.*
+- `DPS_Push_Subscription_Manager::get_instance()` — Retorna instância singleton.
+- `DPS_Push_Subscription_Manager::save_subscription()` — Salva uma nova subscription.
+- `DPS_Push_Subscription_Manager::get_subscriptions_by_user()` — Lista subscriptions de um usuário.
+- `DPS_Push_Subscription_Manager::delete_subscription()` — Remove subscription.
+- `DPS_Push_Subscription_Manager::cleanup_expired()` — Remove subscriptions expiradas ou inválidas.
 
 #### DPS_Email_Reports
 *Geração e envio de relatórios por e-mail (ex.: para admin ou rotinas).*
-- *(Sem métodos públicos listados no documento de referência.)*
+- `DPS_Email_Reports::get_instance()` — Retorna instância singleton.
+- `DPS_Email_Reports::generate_daily_report()` — Gera relatório diário de atendimentos.
+- `DPS_Email_Reports::generate_weekly_report()` — Gera relatório semanal.
+- `DPS_Email_Reports::generate_monthly_report()` — Gera relatório mensal.
+- `DPS_Email_Reports::send_report()` — Envia relatório por email para destinatários configurados.
+- `DPS_Email_Reports::schedule_reports()` — Agenda envio automático de relatórios via cron.
 
 ## AI Add-on
 
@@ -482,9 +1122,8 @@
 - `DPS_Backup_Settings::get()` — Obtém valor de uma configuração específica.
 - `DPS_Backup_Settings::set()` — Define valor de uma configuração.
 - `DPS_Backup_Settings::get_available_components()` — Retorna componentes disponíveis para backup.
-- `DPS_Backup_Settings::dps_booking_check_base_plugin()` — Verifica se o plugin base está ativo; exibe aviso de erro se ausente.
-- `DPS_Backup_Settings::dps_booking_load_textdomain()` — Carrega arquivos de tradução para o add-on de booking.
-- `DPS_Backup_Settings::dps_booking_init_addon()` — Inicializa a instância singleton do Booking Add-on.
+- `DPS_Backup_Settings::get_retention_days()` — Retorna número de dias para retenção de backups.
+- `DPS_Backup_Settings::get_schedule_frequency()` — Retorna frequência de backup agendado (daily, weekly, monthly).
 
 ## Booking Add-on
 
@@ -555,7 +1194,7 @@
 - `DPS_Payment_Addon::render_settings_page()` — Renderiza página completa de configurações de pagamento com indicador de status.
 - `DPS_Payment_Addon::maybe_generate_payment_link()` — Gera link de pagamento para agendamentos finalizados e armazena como post meta.
 - `DPS_Payment_Addon::inject_payment_link_in_message()` — Filtro que injeta link de pagamento e informações PIX em mensagens WhatsApp.
-- `DPS_Payment_Addon::maybe_handle_mp_notification()` — addon->maybe_handle_mp_notification()
+- `DPS_Payment_Addon::maybe_handle_mp_notification()` — Processa notificações/webhooks do MercadoPago.
 
 #### DPS_MercadoPago_Config
 *Gerencia credenciais seguras do MercadoPago com sistema de fallback prioritário (constantes → opções do banco).*
@@ -564,8 +1203,8 @@
 - `DPS_MercadoPago_Config::get_webhook_secret()` — Recupera webhook secret para validação.
 - `DPS_MercadoPago_Config::is_access_token_from_constant()` — Verifica se access token é definido via constante DPS_MERCADOPAGO_ACCESS_TOKEN.
 - `DPS_MercadoPago_Config::get_masked_credential()` — Retorna credencial mascarada para exibição segura na UI.
-- `DPS_MercadoPago_Config::dps_registration_check_base_plugin()` — Verifica se o plugin base DPS está ativo; exibe aviso administrativo se ausente.
-- `DPS_MercadoPago_Config::dps_registration_load_textdomain()` — Carrega domínio de tradução do plugin para localização.
+- `DPS_MercadoPago_Config::is_configured()` — Verifica se as credenciais estão configuradas.
+- `DPS_MercadoPago_Config::validate_credentials()` — Valida credenciais fazendo requisição de teste à API.
 
 ## Registration Add-on
 
@@ -585,16 +1224,13 @@
 - `DPS_Registration_Addon::render_settings_page()` — Renderiza página de configurações no admin.
 - `DPS_Registration_Addon::render_pending_clients_page()` — Renderiza lista de confirmações de clientes pendentes.
 - `DPS_Registration_Addon::register_rest_routes()` — Registra endpoint REST API para registro.
-- `DPS_Registration_Addon::rest_register_permission_check()` — addon->rest_register_permission_check($request)
+- `DPS_Registration_Addon::rest_register_permission_check()` — Verifica permissões para acesso ao endpoint REST.
 - `DPS_Registration_Addon::handle_rest_register()` — Processa registro de cliente via REST API.
 - `DPS_Registration_Addon::maybe_handle_registration()` — Processa submissão de formulário do frontend.
 - `DPS_Registration_Addon::maybe_handle_email_confirmation()` — Processa confirmação de email via token na URL.
 - `DPS_Registration_Addon::render_registration_form()` — Renderiza shortcode de formulário de registro multi-etapa.
 - `DPS_Registration_Addon::send_confirmation_reminders()` — Envia emails de lembrete para clientes não confirmados após 24h.
 - `DPS_Registration_Addon::get_pet_fieldset_html()` — Gera HTML para um único fieldset de pet.
-- `DPS_Registration_Addon::dps_stock_check_base_plugin()` — Verifica se o plugin base DPS está ativo antes de carregar o add-on.
-- `DPS_Registration_Addon::dps_stock_load_textdomain()` — Carrega domínio de texto para traduções do Stock add-on.
-- `DPS_Registration_Addon::dps_stock_init_addon()` — Inicializa o Stock add-on após disparo do hook init.
 
 ## Stock Add-on
 
@@ -608,6 +1244,7 @@
 
 #### DPS_Stock_Addon
 *Classe principal gerenciando sistema de inventário, registro de CPT, integração de UI e dedução de estoque.*
+- `DPS_Stock_Addon::get_instance()` — Retorna instância singleton do add-on.
 - `DPS_Stock_Addon::register_stock_cpt()` — Registra custom post type para itens de estoque.
 - `DPS_Stock_Addon::register_meta_boxes()` — Adiciona meta box 'dps_stock_details' ao CPT de estoque para edição.
 - `DPS_Stock_Addon::render_stock_metabox()` — Renderiza UI da metabox com campos de unidade, quantidade e quantidade mínima.
@@ -619,8 +1256,8 @@
 - `DPS_Stock_Addon::maybe_handle_appointment_completion()` — Deduz automaticamente estoque quando agendamento é finalizado.
 - `DPS_Stock_Addon::activate()` — Executa na ativação do plugin.
 - `DPS_Stock_Addon::ensure_roles_have_capability()` — Concede capability 'dps_manage_stock' para roles administrator e dps_reception.
-- `DPS_Stock_Addon::dps_subscription_check_base_plugin()` — Verifica se o plugin base DPS está ativo.
-- `DPS_Stock_Addon::dps_subscription_load_textdomain()` — Carrega arquivos de tradução para o subscription add-on.
+- `DPS_Stock_Addon::get_low_stock_items()` — Lista itens com estoque abaixo do mínimo.
+- `DPS_Stock_Addon::adjust_stock()` — Ajusta quantidade de estoque de um item.
 
 ## Subscription Add-on
 
@@ -644,8 +1281,60 @@
 
 ---
 
-## Notas de cobertura
+## Notas de cobertura e alterações
 
-- Este catálogo lista **todas as funções/métodos documentados** no arquivo de referência, além de algumas APIs citadas apenas no índice (sem detalhamento de métodos).
+### Sobre este documento
 
-- Para classes citadas sem lista de métodos, recomenda-se confirmar as assinaturas no código atual antes de finalizar a paridade no DPS v2.
+Este catálogo foi **atualizado** para incluir todas as funções descritas no plano de criação do novo sistema (conforme `PETOS_BLUEPRINT.md` e `PETOS_PLANO_EXECUCAO.md`).
+
+### Alterações principais realizadas
+
+1. **Adição de Domain Layer ao Core:**
+   - Entidades: `Client`, `Pet`, `Appointment`
+   - Value Objects: `ClientId`, `PetId`, `AppointmentId`, `PhoneNumber`, `Email`, `Money`, `DateRange`, `Address`
+   - Enums: `Species`, `PetSize`, `CoatType`, `Aggressiveness`, `AppointmentStatus`, `ServiceType`
+   - Repository Interfaces: `ClientRepositoryInterface`, `PetRepositoryInterface`, `AppointmentRepositoryInterface`
+   - Domain Events: `ClientCreated`, `ClientUpdated`, `PetAddedToClient`, `AppointmentScheduled`, `AppointmentCompleted`, `AppointmentCancelled`
+
+2. **Adição de Application Layer ao Core:**
+   - Commands/Handlers para CRUD de Clientes, Pets e Agendamentos
+   - Queries/Handlers para consultas
+   - DTOs: `ClientDTO`, `PetDTO`, `AppointmentDTO`, `PaginatedResult`
+
+3. **Adição de Infrastructure Layer ao Core:**
+   - Container e Bootstrap: `DPS_Container`, `DPS_Bootstrap`
+   - Event System: `DPS_Event_Dispatcher`
+   - Repositories (implementações): `WpdbClientRepository`, `WpdbPetRepository`, `WpdbAppointmentRepository`
+   - `LegacySchemaMap` para mapeamento do banco legado
+   - REST API v2 Controllers: `DPS_REST_Clients_Controller`, `DPS_REST_Pets_Controller`, `DPS_REST_Appointments_Controller`
+   - Security: `DPS_Rate_Limiter`
+
+4. **Adição de UI Layer ao Core:**
+   - Design System com Design Tokens
+   - Componentes Base (React/TS): Button, Input, Select, DataTable, Modal, Toast, etc.
+   - Admin Pages: ClientsPage, PetsPage, AppointmentsPage, DashboardPage
+
+5. **Redistribuição de Repositories:**
+   - Os repositories (`DPS_Client_Repository`, `DPS_Pet_Repository`, etc.) foram movidos para o Core
+   - Client Portal Add-on agora usa facades que delegam para o Core
+
+6. **Correções de erros de copy-paste:**
+   - Removidas funções incorretas de `DPS_Push_API` (referências ao AI Add-on)
+   - Removidas funções incorretas de `DPS_Backup_Settings`, `DPS_MercadoPago_Config`, `DPS_Registration_Addon` e `DPS_Stock_Addon`
+
+7. **Adição de REST API do Portal:**
+   - `DPS_Portal_REST_Controller` com endpoints para magic link, validação de token, sessão e logout
+
+### Princípios de distribuição
+
+A redistribuição segue os princípios da **Clean Architecture**:
+
+- **Core (Base Plugin):** Contém toda a lógica de domínio, casos de uso, persistência e infraestrutura compartilhada. É independente de add-ons e pode funcionar sozinho para o MVP.
+
+- **Add-ons:** Estendem funcionalidades do Core sem modificá-lo. Comunicam-se via eventos de domínio e APIs públicas.
+
+### Recomendações
+
+- Para classes sem lista de métodos completa, confirmar as assinaturas no código atual antes de finalizar a paridade no DPS v2.
+- Manter este documento atualizado conforme novas funcionalidades forem implementadas.
+- Seguir as convenções definidas em `CONVENCOES.md` para nomenclatura e estrutura de código.
